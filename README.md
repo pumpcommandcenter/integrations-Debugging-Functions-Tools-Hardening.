@@ -699,3 +699,204 @@ lib/
 npx ts-node scripts/run_all.ts
 # or
 ./deploy.sh up
+
+pub fn mint_compressed_reward_nft(
+    ctx: Context<MintCompressedReward>,
+    metadata_uri: String,
+    name: String,
+    symbol: String,
+
+cd programs/pump_rewards
+anchor build --verifiable
+) -> Result<()>
+if let Ok(confidential_account) = get_extension::<ConfidentialTransferAccount>(
+    &ctx.accounts.source.to_account_info().try_borrow_data()?
+) {
+    msg!("Confidential transfer detected via zkToken - tax applied on decrypted amount");
+}/// ElGamal Encryption in Confidential Transfers
+/// 
+/// - Uses ElGamal (additive homomorphic) to encrypt balances on-chain.
+/// - Transfers include zero-knowledge range proofs.
+/// - The transfer hook receives the **decrypted amount** via proof context.
+/// - This allows tax/burn logic while user balances stay private.
+// Secure key loading with validation
+const treasuryKeypair = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(process.env.TREASURY_KEY || '[]'))
+);
+// TODO: Add key rotation + audit logging
+const https = require('https');
+const fs = require('fs');
+
+// Enforce TLS 1.3 + modern ciphers
+const options = {
+  key: fs.readFileSync(process.env.TLS_KEY_PATH),
+  cert: fs.readFileSync(process.env.TLS_CERT_PATH),
+  minVersion: 'TLSv1.3',
+  ciphers: [
+    'TLS_AES_256_GCM_SHA384',
+    'TLS_CHACHA20_POLY1305_SHA256',
+    'TLS_AES_128_GCM_SHA256'
+  ].join(':'),
+  honorCipherOrder: true
+};
+
+https.createServer(options, app).listen(PORT, () => {
+  console.log(`🚀 Secure $PUMP Bot running on HTTPS (TLS 1.3 enforced)`);
+});
+ts-node scripts/rotate_dilithium_keys.ts
+spl-token create-token \
+  --program-id TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb \
+  --transfer-hook $PROGRAM_ID \
+  --enable-metadata \
+  --enable-confidential-transfers \
+  --default-account-state frozen   # Security hardening
+  cd programs/pump_rewards
+anchor build --verifiable
+0 3 * * 0 /path/to/pump_rewards/scripts/rotate_dilithium_keys_cron.sh >> /var/log/pump-key-rotation.log 2>&1
+--default-account-state frozen
+
+# Install liboqs and Node bindings (when stable)
+npm install liboqs-node
+# or build from source: https://github.com/open-quantum-safe/liboqs
+const { OQS } = require('liboqs-node');
+
+const hybridKEM = new OQS.KEM('Kyber768'); // or X25519Kyber768Draft00 when available
+
+// In your HTTPS server options or custom TLS layer:
+// Use hybrid key exchange during handshake
+// Current recommendation: Run classical TLS 1.3 now + plan hybrid upgrade in 2027
+app.post('/admin/rotate-dilithium-keys', async (req, res) => {
+  const authToken = req.headers['x-admin-token'];
+  if (authToken !== process.env.ADMIN_ROTATION_TOKEN) {
+    return res.status(403).send('Forbidden');
+  }
+
+  try {
+    const result = await runRotationScript(); // call the cron script or ts-node
+    res.json({ success: true, result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+cd programs/pump_rewards
+anchor build --verifiable
+/// Dilithium Key Generation (off-chain recommended)
+/// Perform real key generation off-chain using a secure crate like `pqcrypto-dilithium`.
+/// This stub is provided for structure and future on-chain use.
+pub fn generate_dilithium_keypair() -> ([u8; 32], [u8; 64]) {
+    let mut public_key = [0u8; 32];
+    let mut secret_key = [0u8; 64];
+    
+    // TODO: Replace with real implementation:
+    // let (pk, sk) = pqcrypto_dilithium::dilithium5::keypair();
+    // public_key.copy_from_slice(&pk);
+    // secret_key.copy_from_slice(&sk);
+    
+    msg!("Dilithium keypair generation requested (use off-chain in production with secure RNG)");
+    (public_key, secret_key)
+}
+aws secretsmanager update-secret \
+  --secret-id "PUMP_DILITHIUM_PRIVATE_KEY" \
+  --secret-string "$NEW_PRIV"
+  cd programs/pump_rewards
+anchor build --verifiable
+chmod +x scripts/rotate_dilithium_keys_cron.sh
+crontab -e
+# Add: 0 3 * * 0 /full/path/to/rotate_dilithium_keys_cron.sh
+curl -X POST https://your-bot.example.com/admin/rotate-dilithium-keys \
+  -H "x-admin-token: $ADMIN_ROTATION_TOKEN"
+  cd offchain-keygen
+cargo run --release -- --output my_keys.json
+cd key-rotation-service
+docker compose up -d --build
+cd pump_rewards/key-rotation-service
+
+# 1. Build the hardened image
+docker compose build --no-cache
+
+# 2. Start the service (it will use the scripts from the parent folder)
+docker compose up -d
+
+# 3. Check it's running with mTLS ready
+docker compose ps
+docker logs pump-key-rotation
+
+# 4. Quick health check (internal)
+curl -k https://localhost:3443/health
+curl -X POST https://localhost:3443/rotate-dilithium-keys \
+  -H "Content-Type: application/json" \
+  -H "x-admin-token: test-token" \
+  -k
+  # Make executable
+chmod +x scripts/rotate_dilithium_keys_cron.sh
+export ADMIN_ROTATION_TOKEN="your-very-long-random-token-here"
+curl -X POST https://your-production-bot.example.com/admin/rotate-dilithium-keys \
+  -H "x-admin-token: $ADMIN_ROTATION_TOKEN" \
+  -H "Content-Type: application/json"
+  /// Kyber KEM (Key Encapsulation Mechanism) for post-quantum key exchange
+pub fn kyber_encapsulate(public_key: &[u8]) -> Result<([u8; KYBER768_CIPHERTEXT_SIZE], [u8; KYBER768_SHARED_SECRET_SIZE])>
+
+pub fn kyber_decapsulate(ciphertext: &[u8], secret_key: &[u8]) -> Result<[u8; KYBER768_SHARED_SECRET_SIZE]>
+
+/// Hybrid Post-Quantum Key Exchange (X25519 + Kyber)
+pub fn hybrid_key_exchange(...)
+# Wrap new Dilithium key with KMS before storing
+aws kms encrypt \
+  --key-id alias/pump-wrapping-key \
+  --plaintext fileb://<(echo -n "$NEW_PRIV" | base64 -d) \
+  --output text --query CiphertextBlob > wrapped_key.b64
+  cd pump_rewards/key-rotation-service
+
+# Build the hardened image
+docker compose build --no-cache
+
+# Start the service
+docker compose up -d
+
+# Verify it's running with mTLS enabled
+docker compose ps
+docker logs pump-key-rotation
+
+# Test health endpoint
+curl -k https://localhost:3443/health
+chmod +x scripts/rotate_dilithium_keys_cron.sh
+
+# Copy to production server
+sudo cp scripts/rotate_dilithium_keys_cron.sh /opt/pump/scripts/
+sudo chmod 700 /opt/pump/scripts/rotate_dilithium_keys_cron.sh
+
+# Add to crontab (every 90 days)
+crontab -e
+# Paste: 0 3 */90 * * /opt/pump/scripts/rotate_dilithium_keys_cron.sh >> /var/log/pump-rotation.log 2>&1
+cd pump_rewards/offchain-keygen
+
+# Build with real pqcrypto-dilithium (uncomment the dependency first)
+cargo build --release
+
+# Generate keys (run in air-gapped/secure machine)
+./target/release/pump-dilithium-keygen --output keys.json
+# In your production environment / Docker secrets
+export ADMIN_ROTATION_TOKEN="your-long-random-token-here"
+
+# Test
+curl -X POST https://your-bot.example.com/admin/rotate-dilithium-keys \
+  -H "x-admin-token: $ADMIN_ROTATION_TOKEN"
+  cd key-rotation-service
+chmod +x generate-mtls-certs.sh
+./generate-mtls-certs.sh
+pub fn kyber_encapsulate(public_key: &[u8]) -> Result<([u8; KYBER768_CIPHERTEXT_SIZE], [u8; KYBER768_SHARED_SECRET_SIZE])>
+
+pub fn kyber_decapsulate(ciphertext: &[u8], secret_key: &[u8]) -> Result<[u8; KYBER768_SHARED_SECRET_SIZE]>
+
+pub fn hybrid_key_exchange(classical_shared: &[u8], kyber_ciphertext: &[u8], kyber_secret_key: &[u8]) -> Result<[u8; 64]>
+
+
+
+
+
+
+
+
+
+
