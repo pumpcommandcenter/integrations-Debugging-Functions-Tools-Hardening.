@@ -1215,8 +1215,117 @@ const handleBaseBridge = async () => {
 cd pump-token
 
 docker compose -f docker-compose.full.yml --profile full --profile frontend up -d --build
+<WormholeConnect
+  config={{
+    env: 'mainnet',
+    networks: ['solana', 'base'],
+    tokens: {
+      PUMP: {
+        solana: 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb',
+        base: '0xYourBaseWrappedPUMPAddress' // Update after deployment
+      }
+    },
+    rpcs: {
+      solana: process.env.NEXT_PUBLIC_SOLANA_RPC,
+      base: 'https://mainnet.base.org'
+    }
+  }}
+  onComplete={(transfer) => {
+    // Automatically record bridge metrics when Wormhole transfer completes
+    recordTradeMetrics(
+      'base-bridge',
+      parseFloat(tradeAmount),
+      transfer.txHash || 'wormhole-tx'
+    );
+    
+    setTradeStatus(`✅ Bridge to Base completed! TX: ${transfer.txHash}`);
+    setShowBridge(false);
+  }}
+  onClose={() => setShowBridge(false)}
+/>
+import express from 'express';
+import client from 'prom-client';
 
+const router = express.Router();
 
+const tradeCounter = new client.Counter({
+  name: 'trade_desk_trades_total',
+  help: 'Total successful trades',
+  labelNames: ['chain']
+});
+
+const tradeVolume = new client.Counter({
+  name: 'trade_desk_volume_total',
+  help: 'Total trading volume',
+  labelNames: ['chain']
+});
+
+const tradeErrorCounter = new client.Counter({
+  name: 'trade_desk_errors_total',
+  help: 'Total failed trades / bridges',
+  labelNames: ['chain', 'reason']
+});
+
+router.post('/api/record-trade', (req, res) => {
+  const { chain, amount, txHash, wallet, success = true, reason } = req.body;
+
+  if (!chain || typeof amount !== 'number') {
+    return res.status(400).json({ error: 'chain and numeric amount required' });
+  }
+
+  if (success) {
+    tradeCounter.inc({ chain });
+    tradeVolume.inc({ chain }, amount);
+  } else {
+    tradeErrorCounter.inc({ chain, reason: reason || 'unknown_error' });
+  }
+
+  res.json({ success: true, recorded: success ? 'trade' : 'error' });
+});
+
+export default router;
+import recordTradeRouter from './record-trade-endpoint';
+app.use(recordTradeRouter);
+<WormholeConnect
+  config={{ /* your existing config */ }}
+  onComplete={(transfer) => {
+    recordTradeMetrics('base-bridge', parseFloat(tradeAmount), transfer.txHash || 'completed');
+    setTradeStatus(`✅ Bridge completed! TX: ${transfer.txHash}`);
+    setShowBridge(false);
+  }}
+  onError={(error) => {
+    recordTradeMetrics('base-bridge', parseFloat(tradeAmount) || 0, 'error', false, error.message);
+    setTradeStatus(`❌ Bridge failed: ${error.message}`);
+    setTimeout(() => setShowBridge(false), 2500);
+  }}
+/>
+import { SwapWidget } from '@uniswap/widgets';
+
+// Add this section in your Trade Desk UI (after bridging)
+{selectedChain === 'base' && evmConnected && (
+  <div className="mt-6">
+    <h3 className="text-lg font-bold mb-3">Trade on Base (Uniswap)</h3>
+    <SwapWidget
+      provider={yourEvmProvider}           // from wagmi
+      tokenList={yourTokenList}            // include your Base $PUMP
+      defaultInputTokenAddress="ETH"
+      defaultOutputTokenAddress="0xYourBasePUMP"
+      width={360}
+      onSwapSuccess={(result) => {
+        recordTradeMetrics('base', parseFloat(tradeAmount), result.hash);
+      }}
+    />
+  </div>
+)}
+npm install @uniswap/widgets
+- alert: HighTradeDeskErrorRate
+  expr: sum(rate(trade_desk_errors_total[5m])) / sum(rate(trade_desk_trades_total[5m])) > 0.15
+  for: 5m
+  labels:
+    severity: critical
+  annotations:
+    summary: "High error rate on Trade Desk"
+    
 
 
 
