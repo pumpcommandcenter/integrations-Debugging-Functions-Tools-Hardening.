@@ -890,8 +890,39 @@ pub fn kyber_encapsulate(public_key: &[u8]) -> Result<([u8; KYBER768_CIPHERTEXT_
 pub fn kyber_decapsulate(ciphertext: &[u8], secret_key: &[u8]) -> Result<[u8; KYBER768_SHARED_SECRET_SIZE]>
 
 pub fn hybrid_key_exchange(classical_shared: &[u8], kyber_ciphertext: &[u8], kyber_secret_key: &[u8]) -> Result<[u8; 64]>
+cd pump-token
 
+# 1. Deploy
+./scripts/deploy_incinerator.sh
 
+# 2. Configure env
+cp .env.example .env
+# Edit: RPC_URL, ANCHOR_WALLET, MINT, etc.
+
+# 3. Start (systemd example)
+sudo systemctl start pump-incinerator
+
+# 4. Test manually
+npx ts-node scripts/token_incinerator.ts
+
+# 5. Wire into rebalancer (edit bonding_curve_rebalancer.ts)
+chmod +x scripts/deploy_incinerator.sh
+./scripts/deploy_incinerator.sh
+import { incinerateTokens } from './token_incinerator';
+
+// In your rebalance logic:
+if (imbalance > 0.05) {  // 5% imbalance threshold
+  const burnAmount = Math.floor(imbalance * totalSupply * 0.1); // e.g. 10% of excess
+  await incinerateTokens(burnAmount, true); // true = prefer Jito
+  Metrics.incinerationsTotal.inc({ trigger: 'rebalancer' });
+}
+services:
+  incinerator:
+    build:
+      context: .
+      dockerfile: Dockerfile.incinerator
+    env_file: .env
+    restart: unless-stopped
 
 
 
