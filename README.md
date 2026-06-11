@@ -923,6 +923,299 @@ services:
       dockerfile: Dockerfile.incinerator
     env_file: .env
     restart: unless-stopped
+    cd pump_rewards/offchain-keygen
+
+# 1. Add the real crate (uncomment in Cargo.toml)
+# pqcrypto-dilithium = "0.3"
+
+# 2. Update src/main.rs to use real keygen (replace the stub section with):
+# use pqcrypto_dilithium::dilithium5;
+# let (public_key, secret_key) = dilithium5::keypair();
+
+# 3. Build a release binary
+cargo build --release
+
+# 4. Run it (generates real keys)
+./target/release/pump-dilithium-keygen --output keys.json
+
+sudo cp pump-token/systemd/pump-incinerator.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now pump-incinerator
+sudo systemctl status pump-incinerator
+# 1. Build & test the service
+cd pump-token/key-rotation-service   # (if testing rotation service too)
+docker compose build
+
+# 2. Deploy incinerator
+cd ../..
+chmod +x scripts/deploy_incinerator.sh
+./scripts/deploy_incinerator.sh
+
+# 3. Install systemd service
+sudo cp systemd/pump-incinerator.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now pump-incinerator
+
+# 4. Import Grafana dashboard
+# (Use the JSON file above)
+
+# 5. Verify metrics
+curl http://localhost:3000/metrics | grep incinerat
+# Lean (just the bot)
+docker compose -f docker-compose.full.yml up -d
+
+# Full production stack
+docker compose -f docker-compose.full.yml --profile full up -d
+
+# Full + key rotation service
+docker compose -f docker-compose.full.yml --profile full --profile security up -d
+cd pump-token
+
+# 1. Copy example env
+cp .env.example .env
+# Edit with your real values (RPC, keys, mint, etc.)
+
+# 2. Start full stack
+docker compose -f docker-compose.full.yml --profile full up -d --build
+
+# 3. Check everything is healthy
+docker compose -f docker-compose.full.yml ps
+
+# 4. View Grafana (incinerator dashboard already importable)
+# http://localhost:3002  (admin / changeme or your set password)
+# In Grafana → Dashboards → Import → Upload `grafana/incinerator-dashboard.json`
+cd key-rotation-service
+./generate-mtls-certs.sh
+sudo cp systemd/pump-incinerator.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now pump-incinerator
+cd pump-token
+
+# 1. Environment
+cp .env.example .env
+# Edit .env with your real values
+
+# 2. Generate mTLS certs (for key-rotation-service)
+cd key-rotation-service
+./generate-mtls-certs.sh
+cd ..
+
+# 3. Start full stack
+docker compose -f docker-compose.full.yml --profile full up -d --build
+
+# 4. Import Grafana dashboard + alerts
+# Grafana → Dashboards → Import → incinerator-dashboard.json
+# Alerting → Alert rules → Import → incinerator-alerts.yml
+
+# 5. (Optional) Install systemd service for incinerator
+sudo cp systemd/pump-incinerator.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now pump-incinerator
+{service="incinerator"} |= "Jito" | json | rate[5m]
+{container_name=~"pump-.*"} |~ "error|fail|incinerat"
+cd pump-token/terraform
+
+# Initialize
+terraform init
+
+# Plan (review what will be created)
+terraform plan \
+  -var="grafana_admin_password=StrongPass123!" \
+  -var="helius_webhook_secret=xxx" \
+  -var="treasury_key=xxx" \
+  -var="admin_rotation_token=xxx"
+
+# Apply
+terraform apply
+# 1. Simple filter
+{container_name=~"pump-.*"} |= "error"
+
+# 2. JSON parsing + filtering (great for structured logs from pump-bot/incinerator)
+{container_name="pump-incinerator"} | json | method="jito" | rate[5m]
+
+# 3. Count errors by reason (very useful for incinerator failures)
+sum by (reason) (
+  count_over_time({container_name=~"pump-.*"} |= "fail|error" | json [5m])
+)
+
+# 4. Histogram of burn amounts (if you log the amount)
+{container_name="pump-incinerator"} | json | unwrap amount | __error__="" | histogram_quantile(0.99, sum(rate) by (le))
+
+# 5. Correlate with metrics (using Grafana mixed queries)
+# In Grafana you can combine:
+# LogQL: {service="incinerator"} |= "Jito failed"
+# + PromQL: rate(incineration_failures[5m])
+cd pump-token/ansible
+
+# 1. Edit inventory.yml with your server IP and variables
+# 2. (Recommended) Encrypt secrets with Ansible Vault
+ansible-vault create vars/main.yml
+
+# 3. Run the playbook
+ansible-playbook -i inventory.yml playbook.yml --ask-vault-pass
+if (!verifyHeliusSignature(req)) {
+  console.error(JSON.stringify({
+    level: 'error',
+    msg: 'Invalid Helius signature - possible attack',
+    service: 'pump-bot',
+    timestamp: new Date().toISOString()
+  }));
+  breachCounter.inc();
+  return res.status(401).send('Unauthorized');
+}
+if (!verifyHeliusSignature(req)) {
+  console.error(JSON.stringify({
+    level: 'error',
+    msg: 'Invalid Helius signature - possible attack',
+    service: 'pump-bot',
+    timestamp: new Date().toISOString()
+  }));
+  breachCounter.inc();
+  return res.status(401).send('Unauthorized');
+}
+console.log(JSON.stringify({
+  level: 'info',
+  msg: 'Tokens incinerated via Jito',
+  service: 'incinerator',
+  method: 'jito',
+  amount,
+  bundleId: result.bundleId,
+  timestamp: new Date().toISOString()
+}));
+{service="incinerator"} | json | method="jito"
+labels:
+  - "com.docker.compose.service=pump-bot"
+  - "logging=structured"
+  - {service="incinerator"} 
+{service="pump-bot"}
+{service="incinerator"} | json | method="jito"
+{service="pump-bot"} | json | level="error"
+{service="incinerator"} | json | trace_id=`${__trace.trace_id}`
+prometheus.remote_write "mimir" {
+  endpoint {
+    url = "http://mimir:9009/api/v1/push"
+  }
+}
+mimir:
+  image: grafana/mimir:latest
+  command: ["-target=all", "-config.file=/etc/mimir/mimir.yaml"]
+  volumes:
+    - ./mimir:/etc/mimir
+  ports:
+    - "9009:9009"
+  profiles:
+    - full
+    - cd pump-token
+
+# Rebuild Alloy with new config
+docker compose -f docker-compose.full.yml up -d --build alloy
+
+# Import LogQL query library as a dashboard or use in Explore
+# (copy queries from grafana/logql-queries.md)
+
+# (Optional) Add Mimir service to docker-compose.full.yml and restart
+import TradeDesk from './TradeDesk';
+
+export default function App() {
+  return <TradeDesk />;
+}
+import TradeDesk from './TradeDesk';
+
+export default function App() {
+  return <TradeDesk />;
+}
+cd pump-token
+
+# Start with frontend profile
+docker compose -f docker-compose.full.yml --profile full --profile frontend up -d --build
+
+# Or standalone
+cd xnft-frontend
+npm run dev
+{
+  "@solana/wallet-adapter-react": "^0.15.35",
+  "@solana/wallet-adapter-react-ui": "^0.9.35",
+  "wagmi": "^2.12.0",
+  "viem": "^2.21.0"
+}
+app.post('/api/record-trade', (req, res) => {
+  const { chain, amount, txHash } = req.body;
+  
+  tradeCounter.inc({ chain });
+  tradeVolume.inc({ chain }, amount);
+  
+  console.log(`Trade recorded: ${chain} - ${amount} - ${txHash}`);
+  res.json({ success: true });
+});
+const buildJupiterSwapTx = async (userPublicKey: PublicKey, amount: number) => {
+  // 1. Get quote from Jupiter v6
+  const quoteResponse = await fetch(
+    `https://quote-api.jup.ag/v6/quote?inputMint=So11111111111111111111111111111111111111112&outputMint=${MINT.toBase58()}&amount=${amount * 1_000_000_000}&slippageBps=50`
+  ).then(res => res.json());
+
+  // 2. Get swap transaction
+  const swapResponse = await fetch('https://quote-api.jup.ag/v6/swap', {
+    method: 'POST',
+    body: JSON.stringify({
+      quoteResponse,
+      userPublicKey: userPublicKey.toBase58(),
+      wrapAndUnwrapSol: true,
+      dynamicComputeUnitLimit: true,
+      prioritizationFeeLamports: 'auto'
+    })
+  }).then(res => res.json());
+
+  // 3. Return deserialized transaction for signing
+  const swapTransactionBuf = Buffer.from(swapResponse.swapTransaction, 'base64');
+  return Transaction.from(swapTransactionBuf);
+};
+const tradeCounter = new client.Counter({
+  name: 'trade_desk_trades_total',
+  help: 'Total number of trades executed via Trade Desk',
+  labelNames: ['chain']
+});
+
+const tradeVolume = new client.Counter({
+  name: 'trade_desk_volume_total',
+  help: 'Total trading volume via Trade Desk',
+  labelNames: ['chain']
+});
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine
+WORKDIR /app
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/public ./public
+ENV NODE_ENV=production
+EXPOSE 3000
+CMD ["npm", "start"]
+docker build -t pump-trade-desk:latest -f xnft-frontend/Dockerfile xnft-frontend
+docker run -p 3003:3000 pump-trade-desk:latest
+const handleBaseBridge = async () => {
+  if (!publicKey) return;
+
+  setTradeStatus('Initiating bridge to Base via Wormhole...');
+
+  // In production: Use @wormhole-foundation/sdk or Wormhole Connect
+  // Example flow:
+  // 1. Lock/burn $PUMP on Solana
+  // 2. Mint wrapped $PUMP on Base
+  // 3. Record metrics with chain="base-bridge"
+
+  await recordTradeMetrics('base-bridge', parseFloat(tradeAmount), 'bridge-tx-hash');
+  setTradeStatus('✅ Bridge to Base initiated. Check Wormhole dashboard.');
+};
+cd pump-token
+
+docker compose -f docker-compose.full.yml --profile full --profile frontend up -d --build
+
 
 
 
